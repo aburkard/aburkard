@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 
@@ -66,11 +67,12 @@ def generate_clickable_grid(grid, color):
     return "\n\n".join(lines)
 
 
-def generate_readme(grid):
+def generate_readme(grid, svg_content):
     palette_items = []
     for name, emoji in COLORS.items():
         palette_items.append(f"[{emoji}](colors/{name}.md)")
     palette = " ".join(palette_items)
+    cache_bust = hashlib.md5(svg_content.encode()).hexdigest()[:8]
 
     return f"""# place
 
@@ -78,7 +80,7 @@ Pick a color, then click a cell.
 
 {palette}
 
-<img src="canvas.svg" alt="canvas" width="496">
+<img src="canvas.svg?v={cache_bust}" alt="canvas" width="496">
 """
 
 
@@ -95,11 +97,12 @@ def generate_color_page(grid, color_name, color_emoji):
 def main():
     grid = load_grid()
 
+    svg_content = generate_svg(grid)
     with open("canvas.svg", "w") as f:
-        f.write(generate_svg(grid))
+        f.write(svg_content)
 
     with open("README.md", "w") as f:
-        f.write(generate_readme(grid))
+        f.write(generate_readme(grid, svg_content))
 
     os.makedirs("colors", exist_ok=True)
     for name, emoji in COLORS.items():
