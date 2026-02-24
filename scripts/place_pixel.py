@@ -39,6 +39,7 @@ def main():
         json.dump(grid, f)
 
     # Regenerate all markdown files
+    sys.path.insert(0, os.path.dirname(__file__))
     from generate import main as generate_main
     generate_main()
 

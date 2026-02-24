@@ -18,10 +18,9 @@ jobs:
           python-version: "3.12"
 
       - name: Process pixel placement
-        working-directory: scripts
         env:
           ISSUE_TITLE: ${{ github.event.issue.title }}
-        run: python place_pixel.py
+        run: python scripts/place_pixel.py
 
       - name: Commit and push
         run: |
