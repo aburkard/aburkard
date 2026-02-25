@@ -268,9 +268,10 @@ Current grid:
 
 def write_comment_body(before_png, after_png, thinking_text, changes, comment_id):
     """Save before/after PNGs and write comment body with URL placeholders."""
-    with open("before.png", "wb") as f:
+    os.makedirs("snapshots", exist_ok=True)
+    with open("snapshots/before.png", "wb") as f:
         f.write(before_png)
-    with open("after.png", "wb") as f:
+    with open("snapshots/after.png", "wb") as f:
         f.write(after_png)
 
     parts = []

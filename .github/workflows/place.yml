@@ -75,8 +75,8 @@ jobs:
           comment_id = open('comment_id.txt').read().strip()
           with open('comment_body.md') as f:
               body = f.read()
-          body = body.replace('{BEFORE_URL}', f'https://raw.githubusercontent.com/{repo}/{sha}/before.png')
-          body = body.replace('{AFTER_URL}', f'https://raw.githubusercontent.com/{repo}/{sha}/after.png')
+          body = body.replace('{BEFORE_URL}', f'https://raw.githubusercontent.com/{repo}/{sha}/snapshots/before.png')
+          body = body.replace('{AFTER_URL}', f'https://raw.githubusercontent.com/{repo}/{sha}/snapshots/after.png')
           data = json.dumps({'body': body}).encode()
           req = urllib.request.Request(
               f'https://api.github.com/repos/{repo}/issues/comments/{comment_id}',
