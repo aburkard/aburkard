@@ -112,7 +112,7 @@ Current grid:
         response_json_schema=RESPONSE_SCHEMA,
         max_output_tokens=65536,
         thinking_config=types.ThinkingConfig(
-            thinking_level="low",
+            thinking_level="medium",
             include_thoughts=True,
         ),
     )
