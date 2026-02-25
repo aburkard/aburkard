@@ -74,9 +74,11 @@ def generate_readme(grid, svg_filename):
         palette_items.append(f"[{emoji}](colors/{name}.md)")
     palette = " ".join(palette_items)
 
+    custom_url = f"https://github.com/{REPO}/issues/new?title=&body=%3C%21--+Describe+what+you+want+to+draw+--%3E"
+
     return f"""## r/place
 
-Pick a color to place a pixel.
+Pick a color to place a pixel, or [draw something]({custom_url}) with AI.
 
 {palette}
 
