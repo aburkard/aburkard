@@ -6,6 +6,10 @@ from datetime import datetime, timezone
 GRID_SIZE = 32
 DAILY_LLM_LIMIT = 50
 VALID_COLORS = ["white", "black", "red", "blue", "green", "yellow", "purple", "orange"]
+HEX_COLORS = {
+    "white": "#e0e0e0", "black": "#000000", "red": "#e74c3c", "blue": "#3498db",
+    "green": "#2ecc71", "yellow": "#f1c40f", "purple": "#9b59b6", "orange": "#e67e22",
+}
 
 
 def place_single(grid, title):
@@ -48,6 +52,25 @@ RESPONSE_SCHEMA = {
 }
 
 
+def grid_to_png(grid):
+    """Render the grid as a PNG image bytes."""
+    import io
+    from PIL import Image
+
+    cell = 16
+    img = Image.new("RGB", (GRID_SIZE * cell, GRID_SIZE * cell))
+    for y, row in enumerate(grid):
+        for x, color in enumerate(row):
+            hex_color = HEX_COLORS.get(color, "#e0e0e0")
+            r, g, b = int(hex_color[1:3], 16), int(hex_color[3:5], 16), int(hex_color[5:7], 16)
+            for dy in range(cell):
+                for dx in range(cell):
+                    img.putpixel((x * cell + dx, y * cell + dy), (r, g, b))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def place_with_llm(grid, prompt):
     """Handle natural language requests via Gemini."""
     import time
@@ -63,9 +86,11 @@ def place_with_llm(grid, prompt):
     client = genai.Client(api_key=api_key)
 
     grid_str = json.dumps(grid)
+    png_bytes = grid_to_png(grid)
+
     system_prompt = f"""You are a pixel art assistant for a 32x32 grid (x: 0-31, y: 0-31). x is the column (left to right), y is the row (top to bottom).
 
-The user will request a drawing or modification.
+The attached image shows the current canvas. The JSON below is the same grid data.
 
 If the request is offensive, hateful, violent, sexual, or inappropriate, set "refused" to true and return an empty pixels array.
 
@@ -73,6 +98,11 @@ Otherwise, set "refused" to false and return the pixel changes in the "pixels" a
 
 Current grid:
 {grid_str}"""
+
+    contents = [
+        types.Part.from_bytes(data=png_bytes, mime_type="image/png"),
+        types.Part.from_text(text=system_prompt + "\n\nUser request: " + prompt),
+    ]
 
     config = types.GenerateContentConfig(
         response_mime_type="application/json",
@@ -86,7 +116,7 @@ Current grid:
             try:
                 response = client.models.generate_content(
                     model=model,
-                    contents=system_prompt + "\n\nUser request: " + prompt,
+                    contents=contents,
                     config=config,
                 )
                 break
