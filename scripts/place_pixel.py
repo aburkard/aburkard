@@ -169,6 +169,7 @@ Current grid:
             try:
                 thinking_text = ""
                 response_text = ""
+                thinking_done = False
                 last_update = time.time()
 
                 stream = client.models.generate_content_stream(
@@ -187,17 +188,26 @@ Current grid:
                         if hasattr(part, "thought") and part.thought:
                             thinking_text += text
                         else:
+                            # First response chunk = thinking is done
+                            if comment_id and thinking_text and not thinking_done:
+                                thinking_done = True
+                                try:
+                                    body = f"*Applying changes...*\n\n<details open><summary>Model thinking</summary>\n\n{thinking_text}\n\n</details>"
+                                    _update_comment(comment_id, body)
+                                except Exception:
+                                    pass
                             response_text += text
 
-                    # Update comment every 2 seconds during thinking
-                    now = time.time()
-                    if comment_id and thinking_text and now - last_update >= 2:
-                        try:
-                            body = f"*Thinking...*\n\n<details open><summary>Model thinking</summary>\n\n{thinking_text}\n\n</details>"
-                            _update_comment(comment_id, body)
-                        except Exception:
-                            pass
-                        last_update = now
+                    # Update comment every 2 seconds while still thinking
+                    if not thinking_done:
+                        now = time.time()
+                        if comment_id and thinking_text and now - last_update >= 2:
+                            try:
+                                body = f"*Thinking...*\n\n<details open><summary>Model thinking</summary>\n\n{thinking_text}\n\n</details>"
+                                _update_comment(comment_id, body)
+                            except Exception:
+                                pass
+                            last_update = now
 
                 break  # success
             except Exception as e:
