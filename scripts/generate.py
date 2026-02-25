@@ -74,7 +74,7 @@ def generate_readme(grid, svg_filename):
         palette_items.append(f"[{emoji}](colors/{name}.md)")
     palette = " ".join(palette_items)
 
-    custom_url = f"https://github.com/{REPO}/issues/new?title=&body=%3C%21--+Describe+what+you+want+to+draw+--%3E"
+    custom_url = f"https://github.com/{REPO}/issues/new?title=&body=%3C%21--+Type+your+request+as+the+issue+title%2C+then+submit.%0A%0AExamples%3A%0A-+Add+a+blue+ghost+next+to+the+red+one%0A-+Draw+a+small+green+tree+in+the+top+right%0A-+Write+%22hello%22+in+orange%0A-+Clear+the+bottom+row+--%3E"
 
     return f"""## r/place
 
