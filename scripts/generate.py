@@ -1,4 +1,3 @@
-import hashlib
 import json
 import os
 
@@ -72,7 +71,6 @@ def generate_readme(grid, svg_content):
     for name, emoji in COLORS.items():
         palette_items.append(f"[{emoji}](colors/{name}.md)")
     palette = " ".join(palette_items)
-    cache_bust = hashlib.md5(svg_content.encode()).hexdigest()[:8]
 
     return f"""# place
 
@@ -80,7 +78,7 @@ Pick a color, then click a cell.
 
 {palette}
 
-<img src="canvas.svg?v={cache_bust}" alt="canvas" width="496">
+{svg_content}
 """
 
 
