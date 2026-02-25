@@ -4,4 +4,4 @@ Pick a color to place a pixel, or [draw something](https://github.com/aburkard/a
 
 [⬛](colors/black.md) [⬜](colors/white.md) [🟥](colors/red.md) [🟦](colors/blue.md) [🟩](colors/green.md) [🟨](colors/yellow.md) [🟪](colors/purple.md) [🟧](colors/orange.md)
 
-<picture><img src="canvas-6993fea9.svg" alt="canvas" width="512"></picture>
+<picture><img src="canvas-f0bae016.svg" alt="canvas" width="512"></picture>
