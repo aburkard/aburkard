@@ -103,7 +103,8 @@ Current grid:
     parsed = json.loads(response.text)
 
     if parsed.get("refused"):
-        raise ValueError("Request was refused as inappropriate")
+        print("REFUSED")
+        sys.exit(2)
 
     changes = 0
     for pixel in parsed.get("pixels", []):
