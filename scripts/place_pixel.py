@@ -9,7 +9,7 @@ GRID_SIZE = 32
 DAILY_LLM_LIMIT = 50
 PER_USER_LLM_LIMIT = 10
 EXEMPT_USERS = {"aburkard"}
-MAX_TITLE_LENGTH = 1000
+MAX_INPUT_LENGTH = 1000
 VALID_COLORS = ["white", "black", "red", "blue", "green", "yellow", "purple", "orange"]
 HEX_COLORS = {
     "white": "#e0e0e0", "black": "#000000", "red": "#e74c3c", "blue": "#3498db",
@@ -292,8 +292,8 @@ def write_comment_body(before_png, after_png, thinking_text, changes, comment_id
 
 
 def main():
-    title = os.environ.get("ISSUE_TITLE", "")[:MAX_TITLE_LENGTH]
-    body = os.environ.get("ISSUE_BODY", "").strip()[:MAX_TITLE_LENGTH]
+    title = os.environ.get("ISSUE_TITLE", "")[:MAX_INPUT_LENGTH]
+    body = os.environ.get("ISSUE_BODY", "").strip()[:MAX_INPUT_LENGTH]
     prompt = title if not body else f"{title}\n\n{body}"
 
     with open("grid.json") as f:
