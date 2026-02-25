@@ -293,6 +293,8 @@ def write_comment_body(before_png, after_png, thinking_text, changes, comment_id
 
 def main():
     title = os.environ.get("ISSUE_TITLE", "")[:MAX_TITLE_LENGTH]
+    body = os.environ.get("ISSUE_BODY", "").strip()[:MAX_TITLE_LENGTH]
+    prompt = title if not body else f"{title}\n\n{body}"
 
     with open("grid.json") as f:
         grid = json.load(f)
@@ -332,7 +334,7 @@ def main():
         before_png = grid_to_png(grid)
 
         try:
-            changes, thinking_text, comment_id = place_with_llm(grid, title)
+            changes, thinking_text, comment_id = place_with_llm(grid, prompt)
             with open("grid.json", "w") as f:
                 json.dump(grid, f)
 
