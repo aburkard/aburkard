@@ -73,7 +73,7 @@ def grid_to_png(grid):
 
 
 def place_with_llm(grid, prompt):
-    """Handle natural language requests via Gemini."""
+    """Handle natural language requests via Gemini. Returns (changes, thinking_text)."""
     import time
 
     from google import genai
@@ -111,10 +111,15 @@ Current grid:
         response_mime_type="application/json",
         response_json_schema=RESPONSE_SCHEMA,
         max_output_tokens=65536,
+        thinking_config=types.ThinkingConfig(
+            thinking_level="low",
+            include_thoughts=True,
+        ),
     )
 
     models = ["gemini-3-flash-preview", "gemini-2.5-flash"]
     response = None
+    used_model = None
     for model in models:
         for attempt in range(3):
             try:
@@ -123,6 +128,7 @@ Current grid:
                     contents=contents,
                     config=config,
                 )
+                used_model = model
                 break
             except Exception as e:
                 if "503" in str(e) or "UNAVAILABLE" in str(e):
@@ -136,7 +142,21 @@ Current grid:
     if not response:
         raise RuntimeError("All models unavailable after retries")
 
-    parsed = json.loads(response.text)
+    # Extract thinking text
+    thinking_text = None
+    response_text = None
+    for part in response.candidates[0].content.parts:
+        if not part.text:
+            continue
+        if hasattr(part, "thought") and part.thought:
+            thinking_text = part.text
+        else:
+            response_text = part.text
+
+    if not response_text:
+        raise ValueError("No response text from model")
+
+    parsed = json.loads(response_text)
 
     if parsed.get("refused"):
         print("REFUSED")
@@ -152,7 +172,28 @@ Current grid:
     if changes == 0:
         raise ValueError("No valid pixel changes in LLM response")
 
-    return changes
+    return changes, thinking_text
+
+
+def write_comment_body(before_png, after_png, thinking_text, changes):
+    """Save before/after PNGs and write comment body with URL placeholders."""
+    with open("before.png", "wb") as f:
+        f.write(before_png)
+    with open("after.png", "wb") as f:
+        f.write(after_png)
+
+    parts = []
+    parts.append(f"**{changes} pixels changed**\n")
+    parts.append("| Before | After |")
+    parts.append("|--------|-------|")
+    parts.append("| <img src=\"{BEFORE_URL}\" width=\"256\"> | <img src=\"{AFTER_URL}\" width=\"256\"> |")
+
+    if thinking_text:
+        parts.append(f"\n<details><summary>Model thinking</summary>\n\n{thinking_text}\n\n</details>")
+
+    body = "\n".join(parts)
+    with open("comment_body.md", "w") as f:
+        f.write(body)
 
 
 def main():
@@ -181,10 +222,17 @@ def main():
             print(f"REFUSED: daily LLM limit reached ({DAILY_LLM_LIMIT})")
             sys.exit(2)
 
+        # Save before image
+        before_png = grid_to_png(grid)
+
         try:
-            changes = place_with_llm(grid, title)
+            changes, thinking_text = place_with_llm(grid, title)
             with open("grid.json", "w") as f:
                 json.dump(grid, f)
+
+            # Save after image and write comment
+            after_png = grid_to_png(grid)
+            write_comment_body(before_png, after_png, thinking_text, changes)
 
             # Update usage counter (only keep today)
             usage = {today: count + 1}

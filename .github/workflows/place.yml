@@ -45,12 +45,33 @@ jobs:
 
       - name: Commit and push
         if: steps.check.outputs.refused == 'false'
+        id: commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
           git commit -m "Place pixel from #${{ github.event.issue.number }}" || exit 0
           git push
+          echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Post before/after comment
+        if: steps.check.outputs.refused == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f comment_body.md ]; then
+            python3 -c "
+          sha = '${{ steps.commit.outputs.sha }}'
+          repo = '${{ github.repository }}'
+          with open('comment_body.md') as f:
+              body = f.read()
+          body = body.replace('{BEFORE_URL}', f'https://raw.githubusercontent.com/{repo}/{sha}/before.png')
+          body = body.replace('{AFTER_URL}', f'https://raw.githubusercontent.com/{repo}/{sha}/after.png')
+          with open('comment_final.md', 'w') as f:
+              f.write(body)
+          "
+            gh issue comment ${{ github.event.issue.number }} --body-file comment_final.md
+          fi
 
       - name: Close issue (success)
         if: steps.check.outputs.refused == 'false'
