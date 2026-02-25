@@ -33,4 +33,4 @@ jobs:
       - name: Close issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh issue close ${{ github.event.issue.number }} --comment "Pixel placed!"
+        run: gh issue close ${{ github.event.issue.number }} --comment "Done! Your pixel is on the [canvas](https://github.com/${{ github.repository }})."

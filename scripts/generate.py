@@ -62,7 +62,7 @@ def generate_clickable_grid(grid, color):
         cells = []
         for x, cell in enumerate(row):
             emoji = emoji_for(cell)
-            url = f"https://github.com/{REPO}/issues/new?title=place+{x}+{y}+{color}"
+            url = f"https://github.com/{REPO}/issues/new?title=place+{x}+{y}+{color}&body=Click+%22Submit+new+issue%22+to+place+your+pixel."
             cells.append(f"[{emoji}]({url})")
         lines.append("".join(cells))
     return "\n\n".join(lines)
@@ -74,9 +74,9 @@ def generate_readme(grid, svg_filename):
         palette_items.append(f"[{emoji}](colors/{name}.md)")
     palette = " ".join(palette_items)
 
-    return f"""# place
+    return f"""## r/place
 
-Pick a color, then click a cell.
+Pick a color. Click a cell. One pixel at a time.
 
 {palette}
 
@@ -86,7 +86,7 @@ Pick a color, then click a cell.
 
 def generate_color_page(grid, color_name, color_emoji):
     clickable = generate_clickable_grid(grid, color_name)
-    return f"""# Placing: {color_emoji}
+    return f"""Placing {color_emoji} — click a cell, then submit the issue.
 
 [back to canvas](../README.md)
 
