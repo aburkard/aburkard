@@ -4,8 +4,8 @@ import json
 import os
 
 REPO = "aburkard/aburkard"
-GRID_SIZE = 16
-CELL_SIZE = 30
+GRID_SIZE = 32
+CELL_SIZE = 15
 GRID_PAD = 1
 
 COLORS = {
@@ -80,7 +80,7 @@ Pick a color to place a pixel.
 
 {palette}
 
-<img src="{svg_filename}" alt="canvas" width="496">
+<img src="{svg_filename}" alt="canvas" width="512">
 """
 
 
