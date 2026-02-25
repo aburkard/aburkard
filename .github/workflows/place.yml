@@ -29,6 +29,9 @@ jobs:
         env:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           python scripts/place_pixel.py
           echo "status=success" >> $GITHUB_OUTPUT
@@ -54,23 +57,33 @@ jobs:
           git push
           echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Post before/after comment
+      - name: Update comment with images
         if: steps.check.outputs.refused == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_SHA: ${{ steps.commit.outputs.sha }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          if [ -f comment_body.md ]; then
+          if [ -f comment_id.txt ] && [ -f comment_body.md ]; then
             python3 -c "
-          sha = '${{ steps.commit.outputs.sha }}'
-          repo = '${{ github.repository }}'
+          import json, os, urllib.request
+          sha = os.environ['COMMIT_SHA']
+          repo = os.environ['GITHUB_REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          comment_id = open('comment_id.txt').read().strip()
           with open('comment_body.md') as f:
               body = f.read()
           body = body.replace('{BEFORE_URL}', f'https://raw.githubusercontent.com/{repo}/{sha}/before.png')
           body = body.replace('{AFTER_URL}', f'https://raw.githubusercontent.com/{repo}/{sha}/after.png')
-          with open('comment_final.md', 'w') as f:
-              f.write(body)
+          data = json.dumps({'body': body}).encode()
+          req = urllib.request.Request(
+              f'https://api.github.com/repos/{repo}/issues/comments/{comment_id}',
+              data=data, method='PATCH')
+          req.add_header('Authorization', f'token {token}')
+          req.add_header('Accept', 'application/vnd.github+json')
+          req.add_header('Content-Type', 'application/json')
+          urllib.request.urlopen(req)
           "
-            gh issue comment ${{ github.event.issue.number }} --body-file comment_final.md
           fi
 
       - name: Close issue (success)

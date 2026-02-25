@@ -2,3 +2,4 @@ __pycache__/
 .env
 comment_body.md
 comment_final.md
+comment_id.txt

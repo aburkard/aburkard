@@ -1,6 +1,8 @@
 import json
 import os
 import sys
+import time
+import urllib.request
 from datetime import datetime, timezone
 
 GRID_SIZE = 32
@@ -53,6 +55,41 @@ RESPONSE_SCHEMA = {
 }
 
 
+# --- GitHub comment helpers ---
+
+
+def _github_api(method, path, body=None):
+    token = os.environ.get("GH_TOKEN", "")
+    url = f"https://api.github.com{path}"
+    data = json.dumps(body).encode() if body else None
+    req = urllib.request.Request(url, data=data, method=method)
+    req.add_header("Authorization", f"token {token}")
+    req.add_header("Accept", "application/vnd.github+json")
+    if data:
+        req.add_header("Content-Type", "application/json")
+    with urllib.request.urlopen(req) as resp:
+        return json.loads(resp.read())
+
+
+def _can_comment():
+    return all(os.environ.get(k) for k in ["GITHUB_REPOSITORY", "ISSUE_NUMBER", "GH_TOKEN"])
+
+
+def _create_comment(body):
+    repo = os.environ["GITHUB_REPOSITORY"]
+    issue = os.environ["ISSUE_NUMBER"]
+    result = _github_api("POST", f"/repos/{repo}/issues/{issue}/comments", {"body": body})
+    return result["id"]
+
+
+def _update_comment(comment_id, body):
+    repo = os.environ["GITHUB_REPOSITORY"]
+    _github_api("PATCH", f"/repos/{repo}/issues/comments/{comment_id}", {"body": body})
+
+
+# --- Grid rendering ---
+
+
 def grid_to_png(grid):
     """Render the grid as a PNG image bytes."""
     import io
@@ -72,10 +109,11 @@ def grid_to_png(grid):
     return buf.getvalue()
 
 
-def place_with_llm(grid, prompt):
-    """Handle natural language requests via Gemini. Returns (changes, thinking_text)."""
-    import time
+# --- LLM placement ---
 
+
+def place_with_llm(grid, prompt):
+    """Handle natural language requests via Gemini with streaming. Returns (changes, thinking_text, comment_id)."""
     from google import genai
     from google.genai import types
 
@@ -117,48 +155,76 @@ Current grid:
         ),
     )
 
+    # Create comment for streaming updates
+    comment_id = None
+    if _can_comment():
+        comment_id = _create_comment("*Thinking...*")
+
     models = ["gemini-3-flash-preview", "gemini-2.5-flash"]
-    response = None
-    used_model = None
+    thinking_text = ""
+    response_text = ""
+
     for model in models:
         for attempt in range(3):
             try:
-                response = client.models.generate_content(
+                thinking_text = ""
+                response_text = ""
+                last_update = time.time()
+
+                stream = client.models.generate_content_stream(
                     model=model,
                     contents=contents,
                     config=config,
                 )
-                used_model = model
-                break
+
+                for chunk in stream:
+                    if not chunk.candidates or not chunk.candidates[0].content.parts:
+                        continue
+                    for part in chunk.candidates[0].content.parts:
+                        text = part.text or ""
+                        if not text:
+                            continue
+                        if hasattr(part, "thought") and part.thought:
+                            thinking_text += text
+                        else:
+                            response_text += text
+
+                    # Update comment every 2 seconds during thinking
+                    now = time.time()
+                    if comment_id and thinking_text and now - last_update >= 2:
+                        try:
+                            body = f"*Thinking...*\n\n<details open><summary>Model thinking</summary>\n\n{thinking_text}\n\n</details>"
+                            _update_comment(comment_id, body)
+                        except Exception:
+                            pass
+                        last_update = now
+
+                break  # success
             except Exception as e:
                 if "503" in str(e) or "UNAVAILABLE" in str(e):
                     print(f"{model} attempt {attempt + 1} failed: {e}")
                     time.sleep(2 ** attempt)
                 else:
                     raise
-        if response:
+        if response_text:
             break
 
-    if not response:
-        raise RuntimeError("All models unavailable after retries")
-
-    # Extract thinking text
-    thinking_text = None
-    response_text = None
-    for part in response.candidates[0].content.parts:
-        if not part.text:
-            continue
-        if hasattr(part, "thought") and part.thought:
-            thinking_text = part.text
-        else:
-            response_text = part.text
-
     if not response_text:
-        raise ValueError("No response text from model")
+        if comment_id:
+            try:
+                _update_comment(comment_id, "Failed to get response from AI model.")
+            except Exception:
+                pass
+        raise RuntimeError("All models unavailable after retries")
 
     parsed = json.loads(response_text)
 
     if parsed.get("refused"):
+        if comment_id:
+            try:
+                _update_comment(comment_id, "Request was refused.")
+            except Exception:
+                pass
         print("REFUSED")
         sys.exit(2)
 
@@ -170,12 +236,17 @@ Current grid:
             changes += 1
 
     if changes == 0:
+        if comment_id:
+            try:
+                _update_comment(comment_id, "No valid pixel changes in AI response.")
+            except Exception:
+                pass
         raise ValueError("No valid pixel changes in LLM response")
 
-    return changes, thinking_text
+    return changes, thinking_text, comment_id
 
 
-def write_comment_body(before_png, after_png, thinking_text, changes):
+def write_comment_body(before_png, after_png, thinking_text, changes, comment_id):
     """Save before/after PNGs and write comment body with URL placeholders."""
     with open("before.png", "wb") as f:
         f.write(before_png)
@@ -194,6 +265,10 @@ def write_comment_body(before_png, after_png, thinking_text, changes):
     body = "\n".join(parts)
     with open("comment_body.md", "w") as f:
         f.write(body)
+
+    if comment_id:
+        with open("comment_id.txt", "w") as f:
+            f.write(str(comment_id))
 
 
 def main():
@@ -226,13 +301,13 @@ def main():
         before_png = grid_to_png(grid)
 
         try:
-            changes, thinking_text = place_with_llm(grid, title)
+            changes, thinking_text, comment_id = place_with_llm(grid, title)
             with open("grid.json", "w") as f:
                 json.dump(grid, f)
 
             # Save after image and write comment
             after_png = grid_to_png(grid)
-            write_comment_body(before_png, after_png, thinking_text, changes)
+            write_comment_body(before_png, after_png, thinking_text, changes, comment_id)
 
             # Update usage counter (only keep today)
             usage = {today: count + 1}
