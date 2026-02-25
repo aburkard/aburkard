@@ -56,14 +56,18 @@ def generate_svg(grid):
     return "\n".join(lines)
 
 
+def hex_for(color):
+    return HEX_COLORS.get(color, HEX_COLORS["white"])
+
+
 def generate_clickable_grid(grid, color):
     rows = []
     for y, row in enumerate(grid):
         cells = []
         for x, cell in enumerate(row):
-            emoji = emoji_for(cell)
+            bg = hex_for(cell)
             url = f"https://github.com/{REPO}/issues/new?title=place+{x}+{y}+{color}&body=%3C%21--+Click+%22Submit+new+issue%22+to+place+your+pixel.+--%3E"
-            cells.append(f'<td><a href="{url}">{emoji}</a></td>')
+            cells.append(f'<td bgcolor="{bg}"><a href="{url}"><img width="20" height="20" src="px.png"></a></td>')
         rows.append(f'<tr>{"".join(cells)}</tr>')
     return f'<table>{"".join(rows)}</table>'
 
