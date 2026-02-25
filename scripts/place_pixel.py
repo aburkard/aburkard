@@ -25,9 +25,33 @@ def place_single(grid, title):
     return f"Placed {color} at ({x}, {y})"
 
 
+RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "refused": {"type": "boolean"},
+        "pixels": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "x": {"type": "integer"},
+                    "y": {"type": "integer"},
+                    "color": {"type": "string", "enum": VALID_COLORS},
+                },
+                "required": ["x", "y", "color"],
+            },
+        },
+    },
+    "required": ["refused", "pixels"],
+}
+
+
 def place_with_llm(grid, prompt):
     """Handle natural language requests via Gemini."""
+    import time
+
     from google import genai
+    from google.genai import types
 
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
@@ -39,22 +63,19 @@ def place_with_llm(grid, prompt):
     grid_str = json.dumps(grid)
     system_prompt = f"""You are a pixel art assistant for a 32x32 grid (x: 0-31, y: 0-31). x is the column (left to right), y is the row (top to bottom).
 
-Available colors: {', '.join(VALID_COLORS)}
+The user will request a drawing or modification.
 
-The user will request a drawing or modification. You must:
+If the request is offensive, hateful, violent, sexual, or inappropriate, set "refused" to true and return an empty pixels array.
 
-1. REFUSE any request that is offensive, hateful, violent, sexual, or inappropriate. If the request is inappropriate, return exactly: {{"refused": true}}
-2. Otherwise, return ONLY a JSON array of pixel changes: [[x, y, "color"], ...]
-   - Only include pixels that need to change.
-   - Do NOT output the full grid.
-   - No explanation, no markdown, no code fences. Just the JSON array.
-
-Keep existing art intact unless the user asks to change or remove it. Be creative but keep drawings simple and recognizable at 32x32 resolution.
+Otherwise, set "refused" to false and return the pixel changes in the "pixels" array. Only include pixels that need to change. Keep existing art intact unless the user asks to change or remove it.
 
 Current grid:
 {grid_str}"""
 
-    import time
+    config = types.GenerateContentConfig(
+        response_mime_type="application/json",
+        response_json_schema=RESPONSE_SCHEMA,
+    )
 
     models = ["gemini-3-flash-preview", "gemini-2.5-flash"]
     response = None
@@ -64,6 +85,7 @@ Current grid:
                 response = client.models.generate_content(
                     model=model,
                     contents=system_prompt + "\n\nUser request: " + prompt,
+                    config=config,
                 )
                 break
             except Exception as e:
@@ -78,37 +100,17 @@ Current grid:
     if not response:
         raise RuntimeError("All models unavailable after retries")
 
-    text = response.text.strip()
-    # Strip markdown code fences if present
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1]
-        if text.endswith("```"):
-            text = text[: text.rfind("```")]
-        text = text.strip()
+    parsed = json.loads(response.text)
 
-    parsed = json.loads(text)
-
-    # Check if refused
-    if isinstance(parsed, dict) and parsed.get("refused"):
+    if parsed.get("refused"):
         raise ValueError("Request was refused as inappropriate")
 
-    # Validate and apply changes
-    if not isinstance(parsed, list):
-        raise ValueError(f"Expected a JSON array, got {type(parsed).__name__}")
-
     changes = 0
-    for item in parsed:
-        if not isinstance(item, list) or len(item) != 3:
-            continue
-        x, y, color = item
-        if not isinstance(x, int) or not isinstance(y, int):
-            continue
-        if not (0 <= x < GRID_SIZE and 0 <= y < GRID_SIZE):
-            continue
-        if color not in VALID_COLORS:
-            continue
-        grid[y][x] = color
-        changes += 1
+    for pixel in parsed.get("pixels", []):
+        x, y, color = pixel["x"], pixel["y"], pixel["color"]
+        if 0 <= x < GRID_SIZE and 0 <= y < GRID_SIZE:
+            grid[y][x] = color
+            changes += 1
 
     if changes == 0:
         raise ValueError("No valid pixel changes in LLM response")
