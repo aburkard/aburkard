@@ -76,7 +76,7 @@ def generate_readme(grid, svg_filename):
 
     return f"""## r/place
 
-Pick a color. Click a cell. One pixel at a time.
+Pick a color to place a pixel.
 
 {palette}
 
