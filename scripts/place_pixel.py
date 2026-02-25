@@ -110,7 +110,7 @@ Current grid:
     config = types.GenerateContentConfig(
         response_mime_type="application/json",
         response_json_schema=RESPONSE_SCHEMA,
-        max_output_tokens=16384,
+        max_output_tokens=65536,
     )
 
     models = ["gemini-3-flash-preview", "gemini-2.5-flash"]
