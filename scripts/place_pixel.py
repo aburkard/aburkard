@@ -54,10 +54,29 @@ Keep existing art intact unless the user asks to change or remove it. Be creativ
 Current grid:
 {grid_str}"""
 
-    response = client.models.generate_content(
-        model="gemini-3-flash-preview",
-        contents=system_prompt + "\n\nUser request: " + prompt,
-    )
+    import time
+
+    models = ["gemini-3-flash-preview", "gemini-2.5-flash"]
+    response = None
+    for model in models:
+        for attempt in range(3):
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=system_prompt + "\n\nUser request: " + prompt,
+                )
+                break
+            except Exception as e:
+                if "503" in str(e) or "UNAVAILABLE" in str(e):
+                    print(f"{model} attempt {attempt + 1} failed: {e}")
+                    time.sleep(2 ** attempt)
+                else:
+                    raise
+        if response:
+            break
+
+    if not response:
+        raise RuntimeError("All models unavailable after retries")
 
     text = response.text.strip()
     # Strip markdown code fences if present
