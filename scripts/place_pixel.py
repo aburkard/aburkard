@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 
 GRID_SIZE = 32
 DAILY_LLM_LIMIT = 50
+PER_USER_LLM_LIMIT = 10
+EXEMPT_USERS = {"aburkard"}
 MAX_TITLE_LENGTH = 1000
 VALID_COLORS = ["white", "black", "red", "blue", "green", "yellow", "purple", "orange"]
 HEX_COLORS = {
@@ -53,6 +55,14 @@ RESPONSE_SCHEMA = {
     },
     "required": ["refused", "pixels"],
 }
+
+
+def _sanitize_for_markdown(text):
+    """Sanitize text so it can't break out of markdown structures like <details>."""
+    import re
+    # Escape HTML tags that could break comment structure
+    text = re.sub(r"</?(details|summary|script|style|iframe|object|embed|form|input|textarea|button|select|option)[^>]*>", "", text, flags=re.IGNORECASE)
+    return text
 
 
 # --- GitHub comment helpers ---
@@ -192,7 +202,7 @@ Current grid:
                             if comment_id and thinking_text and not thinking_done:
                                 thinking_done = True
                                 try:
-                                    body = f"*Applying changes...*\n\n<details open><summary>Model thinking</summary>\n\n{thinking_text}\n\n</details>"
+                                    body = f"*Applying changes...*\n\n<details open><summary>Model thinking</summary>\n\n{_sanitize_for_markdown(thinking_text)}\n\n</details>"
                                     _update_comment(comment_id, body)
                                 except Exception:
                                     pass
@@ -203,7 +213,7 @@ Current grid:
                         now = time.time()
                         if comment_id and thinking_text and now - last_update >= 2:
                             try:
-                                body = f"*Thinking...*\n\n<details open><summary>Model thinking</summary>\n\n{thinking_text}\n\n</details>"
+                                body = f"*Thinking...*\n\n<details open><summary>Model thinking</summary>\n\n{_sanitize_for_markdown(thinking_text)}\n\n</details>"
                                 _update_comment(comment_id, body)
                             except Exception:
                                 pass
@@ -270,7 +280,7 @@ def write_comment_body(before_png, after_png, thinking_text, changes, comment_id
     parts.append("| <img src=\"{BEFORE_URL}\" width=\"256\"> | <img src=\"{AFTER_URL}\" width=\"256\"> |")
 
     if thinking_text:
-        parts.append(f"\n<details><summary>Model thinking</summary>\n\n{thinking_text}\n\n</details>")
+        parts.append(f"\n<details><summary>Model thinking</summary>\n\n{_sanitize_for_markdown(thinking_text)}\n\n</details>")
 
     body = "\n".join(parts)
     with open("comment_body.md", "w") as f:
@@ -294,17 +304,28 @@ def main():
             json.dump(grid, f)
         print(result)
     else:
-        # Natural language request — check daily limit
+        # Natural language request — check daily limits
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        user = os.environ.get("ISSUE_USER", "unknown")
         usage_file = "llm_usage.json"
         usage = {}
         if os.path.exists(usage_file):
             with open(usage_file) as f:
                 usage = json.load(f)
 
-        count = usage.get(today, 0)
-        if count >= DAILY_LLM_LIMIT:
+        today_usage = usage.get(today, {})
+        # Migrate old format {date: int} to {date: {user: int}}
+        if isinstance(today_usage, int):
+            today_usage = {}
+        global_count = sum(today_usage.values())
+        user_count = today_usage.get(user, 0)
+
+        if global_count >= DAILY_LLM_LIMIT:
             print(f"REFUSED: daily LLM limit reached ({DAILY_LLM_LIMIT})")
+            sys.exit(2)
+
+        if user not in EXEMPT_USERS and user_count >= PER_USER_LLM_LIMIT:
+            print(f"REFUSED: per-user LLM limit reached ({PER_USER_LLM_LIMIT})")
             sys.exit(2)
 
         # Save before image
@@ -320,11 +341,12 @@ def main():
             write_comment_body(before_png, after_png, thinking_text, changes, comment_id)
 
             # Update usage counter (only keep today)
-            usage = {today: count + 1}
+            today_usage[user] = user_count + 1
+            usage = {today: today_usage}
             with open(usage_file, "w") as f:
                 json.dump(usage, f)
 
-            print(f"LLM applied {changes} pixel changes for: {title} (usage: {count + 1}/{DAILY_LLM_LIMIT})")
+            print(f"LLM applied {changes} pixel changes for: {title} (user: {user} {user_count + 1}/{PER_USER_LLM_LIMIT}, global: {global_count + 1}/{DAILY_LLM_LIMIT})")
         except Exception as e:
             print(f"LLM request failed: {e}")
             sys.exit(1)
