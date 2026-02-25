@@ -155,26 +155,37 @@ Current grid:
         types.Part.from_text(text=system_prompt + "\n\nUser request: " + prompt),
     ]
 
-    config = types.GenerateContentConfig(
-        response_mime_type="application/json",
-        response_json_schema=RESPONSE_SCHEMA,
-        max_output_tokens=65536,
-        thinking_config=types.ThinkingConfig(
-            thinking_level="medium",
-            include_thoughts=True,
-        ),
-    )
-
     # Create comment for streaming updates
     comment_id = None
     if _can_comment():
         comment_id = _create_comment("*Thinking...*")
 
-    models = ["gemini-3-flash-preview", "gemini-2.5-flash"]
+    # Model configs: Gemini 3 uses thinkingLevel, Gemini 2.5 uses thinkingBudget
+    base_config = dict(
+        response_mime_type="application/json",
+        response_json_schema=RESPONSE_SCHEMA,
+        max_output_tokens=65536,
+    )
+    model_configs = [
+        ("gemini-3-flash-preview", types.GenerateContentConfig(
+            **base_config,
+            thinking_config=types.ThinkingConfig(
+                thinking_level="medium",
+                include_thoughts=True,
+            ),
+        )),
+        ("gemini-2.5-flash", types.GenerateContentConfig(
+            **base_config,
+            thinking_config=types.ThinkingConfig(
+                thinking_budget=8000,
+                include_thoughts=True,
+            ),
+        )),
+    ]
     thinking_text = ""
     response_text = ""
 
-    for model in models:
+    for model, config in model_configs:
         for attempt in range(3):
             try:
                 thinking_text = ""
@@ -189,7 +200,7 @@ Current grid:
                 )
 
                 for chunk in stream:
-                    if not chunk.candidates or not chunk.candidates[0].content.parts:
+                    if not chunk.candidates or not chunk.candidates[0].content or not chunk.candidates[0].content.parts:
                         continue
                     for part in chunk.candidates[0].content.parts:
                         text = part.text or ""
@@ -221,9 +232,13 @@ Current grid:
 
                 break  # success
             except Exception as e:
-                if "503" in str(e) or "UNAVAILABLE" in str(e):
+                err = str(e)
+                if "503" in err or "UNAVAILABLE" in err:
                     print(f"{model} attempt {attempt + 1} failed: {e}")
                     time.sleep(2 ** attempt)
+                elif "400" in err or "INVALID_ARGUMENT" in err:
+                    print(f"{model} unsupported config, trying next model: {e}")
+                    break
                 else:
                     raise
         if response_text:
