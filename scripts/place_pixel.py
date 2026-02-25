@@ -37,13 +37,19 @@ def place_with_llm(grid, prompt):
     client = genai.Client(api_key=api_key)
 
     grid_str = json.dumps(grid)
-    system_prompt = f"""You are a pixel art assistant. The canvas is EXACTLY 32 rows and 32 columns. Each row MUST have exactly 32 elements. The output MUST be a JSON array with exactly 32 arrays, each with exactly 32 color strings.
+    system_prompt = f"""You are a pixel art assistant for a 32x32 grid (x: 0-31, y: 0-31). x is the column (left to right), y is the row (top to bottom).
 
 Available colors: {', '.join(VALID_COLORS)}
 
-Return ONLY the JSON array. No explanation, no markdown, no code fences.
+The user will request a drawing or modification. You must:
 
-Keep existing pixel art intact unless the user explicitly asks to change or remove it.
+1. REFUSE any request that is offensive, hateful, violent, sexual, or inappropriate. If the request is inappropriate, return exactly: {{"refused": true}}
+2. Otherwise, return ONLY a JSON array of pixel changes: [[x, y, "color"], ...]
+   - Only include pixels that need to change.
+   - Do NOT output the full grid.
+   - No explanation, no markdown, no code fences. Just the JSON array.
+
+Keep existing art intact unless the user asks to change or remove it. Be creative but keep drawings simple and recognizable at 32x32 resolution.
 
 Current grid:
 {grid_str}"""
@@ -61,28 +67,34 @@ Current grid:
             text = text[: text.rfind("```")]
         text = text.strip()
 
-    new_grid = json.loads(text)
+    parsed = json.loads(text)
 
-    # Fix up dimensions if slightly off
-    # Trim or pad rows
-    while len(new_grid) > GRID_SIZE:
-        new_grid.pop()
-    while len(new_grid) < GRID_SIZE:
-        new_grid.append(["white"] * GRID_SIZE)
-    # Trim or pad columns
-    for i, row in enumerate(new_grid):
-        if len(row) > GRID_SIZE:
-            new_grid[i] = row[:GRID_SIZE]
-        while len(new_grid[i]) < GRID_SIZE:
-            new_grid[i].append("white")
+    # Check if refused
+    if isinstance(parsed, dict) and parsed.get("refused"):
+        raise ValueError("Request was refused as inappropriate")
 
-    # Validate colors, replace invalid ones with white
-    for y, row in enumerate(new_grid):
-        for x, cell in enumerate(row):
-            if cell not in VALID_COLORS:
-                new_grid[y][x] = "white"
+    # Validate and apply changes
+    if not isinstance(parsed, list):
+        raise ValueError(f"Expected a JSON array, got {type(parsed).__name__}")
 
-    return new_grid
+    changes = 0
+    for item in parsed:
+        if not isinstance(item, list) or len(item) != 3:
+            continue
+        x, y, color = item
+        if not isinstance(x, int) or not isinstance(y, int):
+            continue
+        if not (0 <= x < GRID_SIZE and 0 <= y < GRID_SIZE):
+            continue
+        if color not in VALID_COLORS:
+            continue
+        grid[y][x] = color
+        changes += 1
+
+    if changes == 0:
+        raise ValueError("No valid pixel changes in LLM response")
+
+    return changes
 
 
 def main():
@@ -100,10 +112,10 @@ def main():
     else:
         # Natural language request
         try:
-            new_grid = place_with_llm(grid, title)
+            changes = place_with_llm(grid, title)
             with open("grid.json", "w") as f:
-                json.dump(new_grid, f)
-            print(f"LLM updated grid for: {title}")
+                json.dump(grid, f)
+            print(f"LLM applied {changes} pixel changes for: {title}")
         except Exception as e:
             print(f"LLM request failed: {e}")
             sys.exit(1)
