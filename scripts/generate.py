@@ -65,7 +65,7 @@ def generate_clickable_grid(grid, color):
             url = f"https://github.com/{REPO}/issues/new?title=place+{x}+{y}+{color}&body=%3C%21--+Click+%22Submit+new+issue%22+to+place+your+pixel.+--%3E"
             cells.append(f'<td><a href="{url}">{emoji}</a></td>')
         rows.append(f'<tr>{"".join(cells)}</tr>')
-    return f'<table>{"".join(rows)}</table>'
+    return f'<table cellpadding="0" cellspacing="0">{"".join(rows)}</table>'
 
 
 def generate_readme(grid, svg_filename):
