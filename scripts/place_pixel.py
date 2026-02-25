@@ -1,8 +1,10 @@
 import json
 import os
 import sys
+from datetime import datetime, timezone
 
 GRID_SIZE = 32
+DAILY_LLM_LIMIT = 50
 VALID_COLORS = ["white", "black", "red", "blue", "green", "yellow", "purple", "orange"]
 
 
@@ -132,12 +134,30 @@ def main():
             json.dump(grid, f)
         print(result)
     else:
-        # Natural language request
+        # Natural language request — check daily limit
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        usage_file = "llm_usage.json"
+        usage = {}
+        if os.path.exists(usage_file):
+            with open(usage_file) as f:
+                usage = json.load(f)
+
+        count = usage.get(today, 0)
+        if count >= DAILY_LLM_LIMIT:
+            print(f"REFUSED: daily LLM limit reached ({DAILY_LLM_LIMIT})")
+            sys.exit(2)
+
         try:
             changes = place_with_llm(grid, title)
             with open("grid.json", "w") as f:
                 json.dump(grid, f)
-            print(f"LLM applied {changes} pixel changes for: {title}")
+
+            # Update usage counter (only keep today)
+            usage = {today: count + 1}
+            with open(usage_file, "w") as f:
+                json.dump(usage, f)
+
+            print(f"LLM applied {changes} pixel changes for: {title} (usage: {count + 1}/{DAILY_LLM_LIMIT})")
         except Exception as e:
             print(f"LLM request failed: {e}")
             sys.exit(1)
