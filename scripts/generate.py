@@ -57,15 +57,15 @@ def generate_svg(grid):
 
 
 def generate_clickable_grid(grid, color):
-    lines = []
+    rows = []
     for y, row in enumerate(grid):
         cells = []
         for x, cell in enumerate(row):
             emoji = emoji_for(cell)
-            url = f"https://github.com/{REPO}/issues/new?title=place+{x}+{y}+{color}&body=Click+%22Submit+new+issue%22+to+place+your+pixel."
-            cells.append(f"[{emoji}]({url})")
-        lines.append("".join(cells))
-    return "\n\n".join(lines)
+            url = f"https://github.com/{REPO}/issues/new?title=place+{x}+{y}+{color}&body=%3C%21--+Click+%22Submit+new+issue%22+to+place+your+pixel.+--%3E"
+            cells.append(f'<td><a href="{url}">{emoji}</a></td>')
+        rows.append(f'<tr>{"".join(cells)}</tr>')
+    return f'<table>{"".join(rows)}</table>'
 
 
 def generate_readme(grid, svg_filename):
