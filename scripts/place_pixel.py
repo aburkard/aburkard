@@ -37,13 +37,13 @@ def place_with_llm(grid, prompt):
     client = genai.Client(api_key=api_key)
 
     grid_str = json.dumps(grid)
-    system_prompt = f"""You are a pixel art assistant for a 32x32 grid. The grid is a JSON array of rows, where each cell is a color string.
+    system_prompt = f"""You are a pixel art assistant. The canvas is EXACTLY 32 rows and 32 columns. Each row MUST have exactly 32 elements. The output MUST be a JSON array with exactly 32 arrays, each with exactly 32 color strings.
 
 Available colors: {', '.join(VALID_COLORS)}
 
-The user will ask you to draw or modify something on the canvas. Return ONLY a valid JSON array representing the updated 32x32 grid. No explanation, no markdown, no code fences — just the JSON array.
+Return ONLY the JSON array. No explanation, no markdown, no code fences.
 
-Keep existing pixel art intact unless the user explicitly asks to change or remove it. Be creative but keep drawings simple and recognizable at 32x32 pixel resolution.
+Keep existing pixel art intact unless the user explicitly asks to change or remove it.
 
 Current grid:
 {grid_str}"""
@@ -63,15 +63,24 @@ Current grid:
 
     new_grid = json.loads(text)
 
-    # Validate
-    if len(new_grid) != GRID_SIZE:
-        raise ValueError(f"Expected {GRID_SIZE} rows, got {len(new_grid)}")
-    for row in new_grid:
-        if len(row) != GRID_SIZE:
-            raise ValueError(f"Expected {GRID_SIZE} cols, got {len(row)}")
-        for cell in row:
+    # Fix up dimensions if slightly off
+    # Trim or pad rows
+    while len(new_grid) > GRID_SIZE:
+        new_grid.pop()
+    while len(new_grid) < GRID_SIZE:
+        new_grid.append(["white"] * GRID_SIZE)
+    # Trim or pad columns
+    for i, row in enumerate(new_grid):
+        if len(row) > GRID_SIZE:
+            new_grid[i] = row[:GRID_SIZE]
+        while len(new_grid[i]) < GRID_SIZE:
+            new_grid[i].append("white")
+
+    # Validate colors, replace invalid ones with white
+    for y, row in enumerate(new_grid):
+        for x, cell in enumerate(row):
             if cell not in VALID_COLORS:
-                raise ValueError(f"Invalid color: {cell}")
+                new_grid[y][x] = "white"
 
     return new_grid
 
