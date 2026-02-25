@@ -1,3 +1,5 @@
+import glob
+import hashlib
 import json
 import os
 
@@ -66,7 +68,7 @@ def generate_clickable_grid(grid, color):
     return "\n\n".join(lines)
 
 
-def generate_readme(grid, svg_content):
+def generate_readme(grid, svg_filename):
     palette_items = []
     for name, emoji in COLORS.items():
         palette_items.append(f"[{emoji}](colors/{name}.md)")
@@ -78,7 +80,7 @@ Pick a color, then click a cell.
 
 {palette}
 
-<a href="https://github.com/{REPO}"><img src="https://raw.githubusercontent.com/{REPO}/main/canvas.svg" alt="canvas" width="496"></a>
+<img src="{svg_filename}" alt="canvas" width="496">
 """
 
 
@@ -95,12 +97,22 @@ def generate_color_page(grid, color_name, color_emoji):
 def main():
     grid = load_grid()
 
+    # Delete old canvas-*.svg files
+    for old in glob.glob("canvas-*.svg"):
+        os.remove(old)
+    # Also remove legacy canvas.svg
+    if os.path.exists("canvas.svg"):
+        os.remove("canvas.svg")
+
     svg_content = generate_svg(grid)
-    with open("canvas.svg", "w") as f:
+    content_hash = hashlib.md5(svg_content.encode()).hexdigest()[:8]
+    svg_filename = f"canvas-{content_hash}.svg"
+
+    with open(svg_filename, "w") as f:
         f.write(svg_content)
 
     with open("README.md", "w") as f:
-        f.write(generate_readme(grid, svg_content))
+        f.write(generate_readme(grid, svg_filename))
 
     os.makedirs("colors", exist_ok=True)
     for name, emoji in COLORS.items():
