@@ -82,7 +82,7 @@ Pick a color to place a pixel, or [draw something]({custom_url}) with AI.
 
 {palette}
 
-<img src="{svg_filename}" alt="canvas" width="512">
+<picture><img src="{svg_filename}" alt="canvas" width="512"></picture>
 """
 
 
