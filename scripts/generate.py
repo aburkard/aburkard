@@ -78,7 +78,7 @@ Pick a color, then click a cell.
 
 {palette}
 
-{svg_content}
+<a href="https://github.com/{REPO}"><img src="https://raw.githubusercontent.com/{REPO}/main/canvas.svg" alt="canvas" width="496"></a>
 """
 
 
